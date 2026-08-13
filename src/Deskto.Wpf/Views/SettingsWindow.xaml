@@ -1,0 +1,20 @@
+<Window x:Class="Deskto.Wpf.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置 - deskto" Width="440" Height="280" WindowStartupLocation="CenterScreen" ResizeMode="NoResize">
+    <StackPanel Margin="16">
+        <CheckBox x:Name="ChkStart" Content="开机自启" Margin="0,4"/>
+        <CheckBox x:Name="ChkHideIcons" Content="隐藏系统桌面图标" Margin="0,4"/>
+
+        <TextBlock Text="桌面图层模式" FontWeight="Bold" Margin="0,8,0,4"/>
+        <ComboBox x:Name="CmbLayer">
+            <ComboBoxItem Content="置顶覆盖（推荐，稳定）" Tag="Overlay"/>
+            <ComboBoxItem Content="置于桌面图标之下（实验性）" Tag="BehindIcons"/>
+        </ComboBox>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button x:Name="BtnOK" Content="确定" Width="80" Margin="6" Padding="6,2"/>
+            <Button x:Name="BtnCancel" Content="取消" Width="80" Margin="6" Padding="6,2"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

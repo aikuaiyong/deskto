@@ -1,0 +1,138 @@
+<Window x:Class="Deskto.Wpf.Views.SidebarWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" ResizeMode="NoResize"
+        Width="298" SizeToContent="Height">
+    <Grid>
+        <!-- 拖拽条：Column 0/2 宽度由 Reposition 动态设 0/6 -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="ColLeft" Width="0"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition x:Name="ColRight" Width="0"/>
+        </Grid.ColumnDefinitions>
+
+    <Border x:Name="MainBorder" Grid.Column="1" CornerRadius="12,0,0,12">
+        <Border.Background>
+            <SolidColorBrush Color="#2B2B3A" Opacity="0.94"/>
+        </Border.Background>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="30"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 顶部栏：折叠/展开 + 左右切换（背景透明，继承 MainBorder 颜色） -->
+            <Border Grid.Row="0" Background="Transparent" CornerRadius="12,0,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="4,0,0,0" VerticalAlignment="Center">
+                            <Button x:Name="BtnCollapse" Content="◀" Width="24" Height="24"
+                                    Background="Transparent" BorderThickness="0" Foreground="White"
+                                    FontSize="11" Cursor="Hand"/>
+                            <Button x:Name="BtnSideToggle" Content="⇄" Width="24" Height="24"
+                                    Background="Transparent" BorderThickness="0" Foreground="White"
+                                    FontSize="11" Cursor="Hand" ToolTip="切换左右位置"/>
+                            <Button x:Name="BtnSettingsToggle" Content="⚙" Width="24" Height="24"
+                                    Background="Transparent" BorderThickness="0" Foreground="White"
+                                    FontSize="11" Cursor="Hand" ToolTip="展开/隐藏功能设置"/>
+                            <Button x:Name="BtnResizeLock" Content="🔒" Width="24" Height="24"
+                                    Background="Transparent" BorderThickness="0" Foreground="White"
+                                    FontSize="11" Cursor="Hand" ToolTip="解锁后拖动边缘调整宽度"/>
+                        </StackPanel>
+                        <TextBlock x:Name="HeaderBlock" Grid.Column="1" Text="侧边栏" Foreground="White"
+                                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                                   FontWeight="Bold" FontSize="12" Margin="0,0,52,0"/>
+                    </Grid>
+                </Border>
+
+                <!-- 可滚动内容区：三个功能区 -->
+                <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,2,0,0">
+                    <StackPanel>
+
+                        <!-- 一、功能设置区：折叠式，点击顶部 ⚙ 展开/隐藏 -->
+                        <StackPanel x:Name="SettingsPanel" Visibility="Collapsed">
+                        <Border BorderBrush="#444" BorderThickness="0,0,0,1" Margin="10,6,10,4" Padding="0,0,0,6">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="BtnAdd" Grid.Row="0" Grid.Column="0" Content="＋ 添加分区" Height="34" Margin="1"
+                                        Background="#3A6EA5" BorderThickness="0" Foreground="White"/>
+                                <Button x:Name="BtnSet" Grid.Row="0" Grid.Column="1" Content="⚙ 设置" Height="34" Margin="1"
+                                        Background="#3A6EA5" BorderThickness="0" Foreground="White"/>
+                                <Button x:Name="BtnStyle" Grid.Row="1" Grid.Column="0" Content="🎨 侧边栏外观" Height="34" Margin="1"
+                                        Background="#555" BorderThickness="0" Foreground="White"/>
+                                <Button x:Name="BtnExit" Grid.Row="1" Grid.Column="1" Content="✕ 退出" Height="34" Margin="1"
+                                        Background="#8B3A3A" BorderThickness="0" Foreground="White"/>
+                                <Button x:Name="BtnUnlock" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="🔓 解锁所有分区" Height="34" Margin="1"
+                                        Background="#4A7A5A" BorderThickness="0" Foreground="White"
+                                        ToolTip="锁定后的分区点击穿透、无法点选，点这里恢复可编辑状态"/>
+                            </Grid>
+                        </Border>
+                        </StackPanel>
+
+                        <!-- 二、自定义标签区 -->
+                        <Border BorderBrush="#444" BorderThickness="0,0,0,1" Margin="10,4,10,4" Padding="0,0,0,8">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="🏷 自定义标签" Foreground="#AAA" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnAddLabel" Content="＋" Width="24" Height="24"
+                                            HorizontalAlignment="Right" Background="Transparent"
+                                            BorderThickness="0" Foreground="#AAA"/>
+                                </Grid>
+                                <ItemsControl x:Name="LabelsList"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 三、待办事项区 -->
+                        <Border Margin="10,4,10,8" Padding="0,0,0,4">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="📋 待办事项" Foreground="#AAA" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnAddTodo" Content="＋" Width="24" Height="24"
+                                            HorizontalAlignment="Right" Background="Transparent"
+                                            BorderThickness="0" Foreground="#AAA"/>
+                                </Grid>
+                                <ItemsControl x:Name="TodoList"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 四、临时便签 -->
+                        <Border Margin="10,4,10,8" Padding="0,0,0,4">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="📝 临时便签" Foreground="#AAA" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnStickyBg" Content="⚙" Width="24" Height="24"
+                                            HorizontalAlignment="Right" Background="Transparent"
+                                            BorderThickness="0" Foreground="#888"
+                                            FontSize="11" Cursor="Hand"
+                                            ToolTip="更换便签背景色"/>
+                                </Grid>
+                                <Border x:Name="StickyBgBorder" Background="#3A3A4A" CornerRadius="6" Padding="6">
+                                    <TextBox x:Name="StickyNote" Background="Transparent" BorderThickness="0"
+                                             Foreground="#DDD" TextWrapping="Wrap" AcceptsReturn="True"
+                                             MinHeight="120" VerticalScrollBarVisibility="Auto"
+                                             TextChanged="StickyNote_TextChanged"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

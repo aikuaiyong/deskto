@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="src/Deskup.Wpf/Deskup.ico" width="80" height="80" alt="Deskup" />
+  <img src="src/Deskto.Wpf/Deskto.ico" width="80" height="80" alt="deskto" />
 </p>
 
-<h1 align="center">Deskup</h1>
-<p align="center"><strong>轻量 · 原生 · 无打扰</strong></p>
-<p align="center">一款 Windows 原生桌面整理工具。拖拽分区归档文件，侧边栏一站式管理标签、待办和便签。</p>
+<h1 align="center">deskto</h1>
+<p align="center"><strong>桌面背景分区 · 不打扰你的桌面</strong></p>
+<p align="center">一款 Windows 桌面背景分区工具。在桌面上框出半透明区域，把图标拖进去让桌面更有条理——锁定后分区变成纯背景，桌面操作与没装它时完全一样。</p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-2.0-blue" />
   <img src="https://img.shields.io/badge/.NET-8.0-blueviolet?logo=dotnet" />
   <img src="https://img.shields.io/badge/WPF-Native-orange?logo=windows" />
   <img src="https://img.shields.io/badge/license-MIT-green" />
@@ -15,12 +16,15 @@
 
 ---
 
-## 为什么用 Deskup？
+## 为什么是 deskto？
 
-桌面文件越堆越多，但又不习惯桌面上什么都没有。Deskup 不像传统桌面管理软件那样接管整个桌面，而是提供一组**轻量窗口**浮在桌面上——你可以把文件拖进「分区」里分类收纳，在侧边栏里随手记便签、列待办。**不用改变习惯，只是让桌面更有条理。**
+桌面文件越堆越多，但你不想装一个"接管整个桌面"的重型管理软件。deskto 的思路很简单：**它不管理你的文件，只给你的桌面画几块背景色。**
 
-- 🧩 **分区**：桌面上的透明容器，拖入文件自动归档，图标跟资源管理器一模一样
-- 📋 **侧边栏**：标签 / 待办 / 便签 / 快捷入口，贴边不占地
+你可以在桌面上创建若干个半透明的「分区框」，拖动它们、调整大小、改标题和配色，然后把系统桌面图标拖进框里——图标还是系统桌面图标，点它、拖它、删它和平时一模一样。**分区只是一个视觉背景，不是一个容器。**
+
+- 🧩 **分区**：可拖动、可缩放、可改标题/配色的半透明背景框
+- 🔒 **锁定即背景**：锁定后点击穿透，不挡鼠标，彻底隐身
+- 📋 **侧边栏**：标签 / 待办 / 便签，贴边不占地，高度随内容自适应
 - 🚀 **启动栏**：顶部悬停呼出，快捷启动常用程序
 - 🪶 **无打扰**：始终在窗口最底层，Win+D 不消失，开机自启驻留托盘
 
@@ -28,39 +32,65 @@
 
 ## 快速开始
 
-**环境要求**：Windows 10+ · .NET 8 SDK
+**环境要求**：Windows 10+ · [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 ```powershell
-git clone https://github.com/yourname/deskup.git
-cd deskup
-.\build.ps1          # 产物 → publish\Deskup.exe
+git clone <你的仓库地址>
+cd deskto
+.\build.ps1          # 产物 → publish\deskto.exe
 ```
 
-或者用 Visual Studio 打开 `Deskup.sln`，F5 运行。
+或者用 Visual Studio 打开 `deskto.sln`，F5 运行。
 
-首次启动后配置文件自动生成在 `%USERPROFILE%\Documents\Deskup\config.json`。
+首次启动后，配置文件生成在 `%LOCALAPPDATA%\deskto\config.json`。
+
+---
+
+## 打包分发
+
+想把 deskto 发给没有开发环境的朋友？用自包含单文件发布即可——**对方电脑无需安装 .NET**。
+
+**最简单（推荐）**：直接**双击仓库根目录的 `build.bat`**，窗口会自动停住不会闪退，跟着提示走即可。
+
+或手动在终端运行：
+
+```powershell
+.\build.ps1
+```
+
+脚本会依次完成：还原依赖 → 发布 `win-x64` 自包含单文件 → 自动压缩为 **`deskto-win-x64.zip`**。
+
+把 `deskto-win-x64.zip` 发给别人，解压后双击 `deskto.exe` 即用。
+
+| 方案 | 产物 | 适合人群 |
+|------|------|----------|
+| `.\build.ps1`（默认） | `deskto-win-x64.zip`（单文件 exe） | 大多数分发场景，零依赖 |
+| `setup.iss` + Inno Setup | `deskto-Setup.exe` 安装向导 | 想给小白用户提供「下一步」安装体验 |
+
+> 安装向导需先装 [Inno Setup](https://jrsoftware.org/isdl.php)，用其打开 `setup.iss` 编译即可。
+
+> 想缩减体积？把 `Deskto.Wpf.csproj` 的 `<SelfContained>` 改为 `false` 做依赖框架发布，但目标机器需先装 .NET 8 运行时。
 
 ---
 
 ## 功能
 
-### 🧩 分区窗口
+### 🧩 分区窗口（桌面背景框）
 
 | 功能 | 说明 |
 |------|------|
-| 拖入文件 | 从桌面/资源管理器拖入，默认复制（可在设置中改为移动） |
-| 图标展示 | 与 Windows 资源管理器完全一致的图标质量（`IShellItemImageFactory`） |
-| 右键菜单 | 打开 / 打开文件位置 / 删除 |
-| 标题操作 | 双击改名、右键配色/透明度/锁定/删除 |
-| 拖拽缩放 | 锁定模式下固定，解锁后可拖动右下角调整大小 |
-| 独立透明度 | 标题栏和内容区分别可调 |
+| 背景色块 | 分区是一块可调颜色/透明度的半透明背景，不再是文件容器 |
+| 标题操作 | 双击改名、右键配色/字号/透明度/锁定/删除 |
+| 拖拽移动 | 按住标题栏拖动分区到桌面任意位置 |
+| 拖拽缩放 | 解锁后拖动右下角调整大小 |
+| 锁定即背景 | 锁定后点击穿透，鼠标事件全部落到桌面，图标正常操作 |
+| 解锁入口 | 锁定后无法点选分区，通过侧边栏「🔓 解锁所有分区」或托盘菜单解锁 |
 
 ### 📋 侧边栏
 
 | 区块 | 说明 |
 |------|------|
-| 功能设置 | 2×2 按钮：添加分区 / 设置 / 外观 / 退出 |
-| ⚡ 快捷入口 | 4×2 网格，共 8 个可自定义快捷方式（右键编辑名称/路径/图标） |
+| 功能设置 | 添加分区 / 设置 / 侧边栏外观 / 解锁所有分区 / 退出 |
 | 🏷 自定义标签 | 彩色标签，右键编辑文字/颜色/字号，原生 Emoji 支持 |
 | 📋 待办事项 | CheckBox + 编辑框，右键编辑背景色/文字颜色/字号 |
 | 📝 临时便签 | 自由文本输入，自动保存；⚙ 20 种预设背景色 + 自定义色号 |
@@ -74,9 +104,8 @@ cd deskup
 
 ### ⚙ 设置
 
-- 分区文件保存路径
-- 桌面图标一键显隐
 - 开机自启
+- 桌面图标一键显隐
 - 图层模式（置顶 / 置于图标之下）
 
 ---
@@ -84,42 +113,52 @@ cd deskup
 ## 技术要点
 
 ```
-Deskup.sln
-├─ src/Deskup.Core/          纯逻辑库（无 WPF 依赖）
+deskto.sln
+├─ src/Deskto.Core/          纯逻辑库（无 WPF 依赖）
 │   ├─ Config/               数据模型、JSON 序列化
-│   ├─ Files/                文件复制/移动
+│   ├─ Files/                系统默认程序打开（供启动栏使用）
 │   └─ Geometry/             分区坐标/边界约束
-├─ src/Deskup.Wpf/           WPF 界面 + Windows Shell 整合
+├─ src/Deskto.Wpf/           WPF 界面 + Windows Shell 整合
 │   ├─ Shell/                WindowEx (P/Invoke)、AppShell、TrayIcon
 │   ├─ Views/                PartitionWindow、SidebarWindow、LaunchBar、SettingsWindow
 │   └─ Helpers/              IconHelper (IShellItemImageFactory)、EmojiHelper
-└─ tests/Deskup.Core.Tests/  独立测试运行器
+└─ tests/Deskto.Core.Tests/  独立测试运行器
 ```
 
-### 桌面层级方案
+### 桌面层级与点击穿透
 
 | 技术 | 作用 |
 |------|------|
 | `Owner = SHELLDLL_DefView` | Win+D 后窗口不消失 |
-| `SetWindowPos(HWND_BOTTOM)` + `WM_SETFOCUS` Hook | 始终 Z 序最底层，不挡任何窗口 |
+| `SetWindowPos(HWND_BOTTOM)` + Hook | 始终 Z 序最底层，不挡任何窗口 |
+| `WS_EX_TRANSPARENT`（点击穿透） | 锁定后鼠标事件穿透到桌面，图标正常操作 |
 | `SWP_NOACTIVATE` | 保持底层同时可正常交互 |
 | `EnumChildWindows` + `ShowWindow` | 一键隐藏/显示系统桌面图标 |
 | `IShellItemImageFactory` | 图标渲染与 Windows 资源管理器完全一致 |
 
 ---
 
-## 路线图
+## 更新日志
 
-- [x] 侧边栏：标签、待办、便签、快捷入口
-- [x] 分区窗口：拖入文件、图标展示、右键菜单
-- [x] 快捷启动栏：悬停展开、固定
-- [x] 系统托盘：最小化驻留、右键菜单
-- [x] 桌面图标显隐
-- [x] 侧边栏背景透明度 0%~100%
-- [ ] 分区内文件排序/筛选
-- [ ] 主题切换（深色/浅色）
-- [ ] 更多分区布局模板
-- [ ] 多显示器支持优化
+### v2.0
+
+**方向转变：分区从「文件容器」变为「桌面背景层」**
+
+- 分区改为纯半透明背景框，不再接管/复制/移动文件
+- 系统桌面图标正常显示在框内，点击、拖动、删除与平时完全一致
+- 锁定分区后开启点击穿透，彻底变成桌面背景
+- 侧边栏与托盘新增「解锁所有分区」入口（锁定后无法点选分区）
+- 移除文件同步、保存目录、删除分区连带删文件夹等旧逻辑
+- 程序全面改名 `Deskup` → `deskto`（项目 / 命名空间 / exe / 配置目录）
+
+### v1.1
+
+- 文件分区与磁盘保存目录双向同步、删除分区二次确认、标题目录同步重命名
+- 修复重启后分区位置/大小恢复默认、多显示器跳回主屏等问题
+
+### v1.0
+
+- 首个可用版本：分区窗口、侧边栏、启动栏、系统托盘、桌面图标显隐
 
 ---
 
