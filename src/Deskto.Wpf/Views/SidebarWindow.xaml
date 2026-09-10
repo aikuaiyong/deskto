@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" ResizeMode="NoResize"
-        Width="298" SizeToContent="Height">
+        Width="298" Height="600">
     <Grid>
         <!-- 拖拽条：Column 0/2 宽度由 Reposition 动态设 0/6 -->
         <Grid.ColumnDefinitions>

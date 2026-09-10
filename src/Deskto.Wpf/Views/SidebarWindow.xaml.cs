@@ -101,6 +101,7 @@ public partial class SidebarWindow : Window
     {
         _state.Config.StickyNote = StickyNote.Text;
         _state.Save();
+        AdjustHeight();
     }
 
     private void EditStickyBg()
@@ -203,6 +204,7 @@ public partial class SidebarWindow : Window
     {
         SettingsPanel.Visibility = SettingsPanel.Visibility == Visibility.Visible
             ? Visibility.Collapsed : Visibility.Visible;
+        AdjustHeight();
     }
 
     // 保留供 XAML 绑定（不再有 ResizeGrip，这些是空壳）
@@ -248,12 +250,11 @@ public partial class SidebarWindow : Window
     /// <summary>根据 _collapsed / _onRight / _expandedWidth 统一套用侧边栏布局。</summary>
     private void ApplySidebarLayout()
     {
-        // 高度随内容自适应（紧贴内容收短），但不超过屏幕高度，避免便签过长撑出屏幕
-        MaxHeight = SystemParameters.PrimaryScreenHeight;
         Top = 0;
         if (_collapsed)
         {
             Width = 38;
+            Height = 30;  // 折叠只剩顶部栏
             MainBorder.Width = 38;
             BtnCollapse.Content = _onRight ? "▶" : "◀";
             HeaderBlock.Text = "";
@@ -272,11 +273,22 @@ public partial class SidebarWindow : Window
             BtnSettingsToggle.Visibility = Visibility.Visible;
             BtnResizeLock.Visibility = Visibility.Visible;
             ContentScroll.Visibility = Visibility.Visible;
+            AdjustHeight();  // 展开时按内容实际高度收短
         }
         Left = _onRight ? SystemParameters.PrimaryScreenWidth - Width : 0;
         MainBorder.CornerRadius = _collapsed
             ? (_onRight ? new CornerRadius(0, 0, 0, 8) : new CornerRadius(0, 0, 8, 0))
             : new CornerRadius(0, 0, 0, 12);
+    }
+
+    /// <summary>按内容实际高度设置窗口高度：删除快捷入口后侧边栏收短，不再全屏；内容超长时上限为屏幕高度。</summary>
+    private void AdjustHeight()
+    {
+        if (_collapsed) { Height = 30; return; }
+        var w = ContentScroll.ActualWidth > 0 ? ContentScroll.ActualWidth : _expandedWidth;
+        ContentScroll.Measure(new Size(w, double.PositiveInfinity));
+        var contentH = ContentScroll.DesiredSize.Height;
+        Height = Math.Max(120, Math.Min(30 + contentH + 8, SystemParameters.PrimaryScreenHeight));
     }
 
     private void ToggleSide()
@@ -334,6 +346,7 @@ public partial class SidebarWindow : Window
             border.MouseRightButtonDown += (_, _) => EditLabel(l);
             LabelsList.Items.Add(border);
         }
+        AdjustHeight();
     }
 
     // ============ 待办管理 ============
@@ -405,6 +418,7 @@ public partial class SidebarWindow : Window
             border.Child = row;
             TodoList.Items.Add(border);
         }
+        AdjustHeight();
     }
 
     private void EditTodo(TodoItem t)
