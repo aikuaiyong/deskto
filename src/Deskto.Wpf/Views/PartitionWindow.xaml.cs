@@ -1,12 +1,18 @@
+using AnimatedImage.Wpf;
 using Deskto.Core.Config;
 using Deskto.Core.Geometry;
 using Deskto.Wpf.Services;
 using Deskto.Wpf.Shell;
+using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 // 避免与 System.Windows.Media.Geometry 命名冲突
@@ -59,8 +65,16 @@ public partial class PartitionWindow : Window
         {
             _restoringGeometry = false;
         }
-        // 分辨率变化等导致越界时，钳制回可视区域（此时允许正常保存修正后的值）
-        ClampToDesktop();
+        // 不在启动早期立即钳制：开机自启时系统屏幕参数可能未就绪（读出来是 0），
+        // 立即钳制会把分区位置错误地拉到左上角（表现为「位置被重置」）。
+        // 延迟几秒等系统稳定后再钳制。
+        var clampTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        clampTimer.Tick += (_, _) =>
+        {
+            clampTimer.Stop();
+            ClampToDesktop();
+        };
+        clampTimer.Start();
         // Emoji 渲染需等到 Dispatcher Loaded 才有效
         Dispatcher.BeginInvoke(new Action(() => { ApplyVisual(); UpdateTitleBarHeight(); }),
             System.Windows.Threading.DispatcherPriority.Loaded);
@@ -85,11 +99,231 @@ public partial class PartitionWindow : Window
         var tBg = ParseColor(v.TitleBgColor ?? "#3A6EA5");
         tBg.A = (byte)(Clamp01(v.TitleOpacity) * 255);
         TitleBar.Background = new SolidColorBrush(tBg);
-        // 内容区：Alpha 通道替代 Opacity，图标不再雾化
-        var cBg = ParseColor(v.ContentBgColor ?? "#FFFFFF");
-        cBg.A = (byte)(Clamp01(v.ContentOpacity) * 255);
-        ContentArea.Background = new SolidColorBrush(cBg);
+
+        // 内容区：优先显示自定义背景图，否则用纯色
+        var path = v.BackgroundImagePath;
+        if (!string.IsNullOrWhiteSpace(path) && SetImageSource(BackgroundImage, path))
+        {
+            // 背景图模式：底色透明，让 PNG 的透明区域直接透出桌面
+            ContentArea.Background = Brushes.Transparent;
+            BackgroundImage.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            // 清掉背景图（含 GIF 动画状态）
+            ImageBehavior.SetAnimatedSource(BackgroundImage, null);
+            BackgroundImage.Source = null;
+            BackgroundImage.Visibility = Visibility.Collapsed;
+            // Alpha 通道替代 Opacity，图标不再雾化
+            var cBg = ParseColor(v.ContentBgColor ?? "#FFFFFF");
+            cBg.A = (byte)(Clamp01(v.ContentOpacity) * 255);
+            ContentArea.Background = new SolidColorBrush(cBg);
+        }
         ResizeGrip.Visibility = v.Locked ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 把图片设置到 Image 控件：
+    /// - GIF / APNG → 交给 AnimatedImage 处理（是动画就循环播放，静态图就直接显示）
+    /// - JPG / BMP 等 → 静态显示
+    /// 一律「等比例缩放、完整显示」：不裁剪、不变形。
+    /// 关键点：加载后立即释放文件句柄，用户可随意删除/替换源图片。
+    /// </summary>
+    private static bool SetImageSource(Image target, string path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return false;
+
+            var ext = Path.GetExtension(path);
+            bool maybeAnimated =
+                ext.Equals(".gif", StringComparison.OrdinalIgnoreCase) ||
+                ext.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+                ext.Equals(".apng", StringComparison.OrdinalIgnoreCase);
+
+            if (maybeAnimated)
+            {
+                // PNG 既可能是静态图也可能是 APNG，统一交给 AnimatedImage 判断
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(path, UriKind.Absolute);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;   // 立即加载并释放文件句柄
+                bmp.EndInit();
+                ImageBehavior.SetAnimatedSource(target, bmp);
+                ImageBehavior.SetRepeatBehavior(target, RepeatBehavior.Forever);
+            }
+            else
+            {
+                // 其余静态图：走缓存，避免重复解码
+                var img = LoadCachedImage(path);
+                if (img == null) return false;
+                ImageBehavior.SetAnimatedSource(target, null);  // 清掉残留的动画状态
+                target.Source = img;
+            }
+            target.Stretch = Stretch.Uniform;
+            return true;
+        }
+        catch
+        {
+            return false; // 图片损坏/被占用等，回退纯色
+        }
+    }
+
+    // 背景图缓存：同一路径且文件未修改时复用已解码的图片，避免重复读盘解码
+    private static readonly Dictionary<string, (DateTime WriteTime, ImageSource Image)> _bgImageCache = new();
+
+    private static ImageSource? LoadCachedImage(string path)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            if (!fi.Exists) return null;
+
+            if (_bgImageCache.TryGetValue(path, out var cached) && cached.WriteTime == fi.LastWriteTimeUtc)
+                return cached.Image;
+
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri(path, UriKind.Absolute);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;      // 立即加载并释放文件句柄
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bmp.EndInit();
+            bmp.Freeze();                                     // 冻结后可跨线程复用
+
+            _bgImageCache[path] = (fi.LastWriteTimeUtc, bmp);
+            return bmp;
+        }
+        catch
+        {
+            return null; // 图片损坏/被占用等，回退纯色
+        }
+    }
+
+    /// <summary>背景图设置窗：选择图片、预览、清除。图片按等比例缩放完整显示。</summary>
+    private void OpenBackgroundSettings()
+    {
+        var v = _model.Visual;
+        var popup = new Window
+        {
+            Title = $"背景图 - {v.Title}",
+            Width = 390,
+            Height = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.SingleBorderWindow,
+        };
+        var panel = new StackPanel { Margin = new Thickness(12) };
+
+        // 预览区
+        var preview = new Border
+        {
+            Height = 170,
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x28)),
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        var previewImg = new Image { Stretch = Stretch.Uniform, Margin = new Thickness(4) };
+        preview.Child = previewImg;
+        panel.Children.Add(preview);
+
+        // 当前路径
+        var pathText = new TextBlock
+        {
+            FontSize = 11,
+            Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        panel.Children.Add(pathText);
+
+        // 刷新预览 + 应用到分区 + 落盘
+        void RefreshPreview()
+        {
+            pathText.Text = string.IsNullOrWhiteSpace(v.BackgroundImagePath)
+                ? "（当前使用纯色背景）"
+                : v.BackgroundImagePath;
+            if (string.IsNullOrWhiteSpace(v.BackgroundImagePath))
+            {
+                ImageBehavior.SetAnimatedSource(previewImg, null);
+                previewImg.Source = null;
+            }
+            else
+            {
+                SetImageSource(previewImg, v.BackgroundImagePath);   // GIF 在预览里也会动
+            }
+            ApplyVisual();
+            _state.Save();
+        }
+
+        // 选择图片
+        var pickBtn = new Button
+        {
+            Content = "\U0001F4C1 选择图片（PNG / APNG / JPG / GIF / BMP）",
+            Height = 34,
+            Margin = new Thickness(0, 0, 0, 10),
+            Background = new SolidColorBrush(Color.FromRgb(0x3A, 0x6E, 0xA5)),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+        };
+        pickBtn.Click += (_, _) =>
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "选择分区背景图",
+                Filter = "图片文件|*.png;*.apng;*.jpg;*.jpeg;*.bmp;*.gif|PNG / APNG|*.png;*.apng|GIF|*.gif|所有文件|*.*",
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                v.BackgroundImagePath = dlg.FileName;
+                RefreshPreview();
+            }
+        };
+        panel.Children.Add(pickBtn);
+
+        // 说明
+        panel.Children.Add(new TextBlock
+        {
+            Text = "图片按分区比例等比缩放后完整显示（不裁剪、不变形）。\nPNG 透明处直接透出桌面；GIF 与 APNG 会自动循环播放动画。",
+            FontSize = 11,
+            Foreground = Brushes.Gray,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        });
+
+        // 底部按钮
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var clearBtn = new Button
+        {
+            Content = "清除背景图",
+            Width = 100,
+            Height = 32,
+            Margin = new Thickness(0, 0, 6, 0),
+            Background = new SolidColorBrush(Color.FromRgb(0x8B, 0x3A, 0x3A)),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+        };
+        clearBtn.Click += (_, _) =>
+        {
+            v.BackgroundImagePath = "";
+            RefreshPreview();
+        };
+        var okBtn = new Button
+        {
+            Content = "完成",
+            Width = 80,
+            Height = 32,
+            Background = new SolidColorBrush(Color.FromRgb(0x3A, 0x6E, 0xA5)),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+        };
+        okBtn.Click += (_, _) => popup.Close();
+        btnRow.Children.Add(clearBtn);
+        btnRow.Children.Add(okBtn);
+        panel.Children.Add(btnRow);
+
+        popup.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        RefreshPreview();
+        popup.ShowDialog();
     }
 
     private void UpdateTitleBarHeight()
@@ -118,6 +352,10 @@ public partial class PartitionWindow : Window
         var miColor = new MenuItem { Header = "🎨 分区配色与透明度" };
         miColor.Click += (_, _) => OpenColorSettings();
         cm.Items.Add(miColor);
+        // 自定义背景图
+        var miBg = new MenuItem { Header = "🖼 更换背景图" };
+        miBg.Click += (_, _) => OpenBackgroundSettings();
+        cm.Items.Add(miBg);
         // 分隔线 + 删除（仅文件分区）
         if (_model.Kind == PanelKind.Files)
         {
@@ -348,8 +586,16 @@ public partial class PartitionWindow : Window
     {
         var left = SystemParameters.VirtualScreenLeft;
         var top = SystemParameters.VirtualScreenTop;
-        var right = left + SystemParameters.VirtualScreenWidth;
-        var bottom = top + SystemParameters.VirtualScreenHeight;
+        var width = SystemParameters.VirtualScreenWidth;
+        var height = SystemParameters.VirtualScreenHeight;
+
+        // 系统屏幕参数未就绪（开机早期显示器未枚举完）时跳过钳制，
+        // 避免把分区位置错误地拉到左上角（表现为「位置被重置」）。
+        if (width <= 0 || height <= 0)
+            return;
+
+        var right = left + width;
+        var bottom = top + height;
 
         if (Left < left - Width + 30) Left = left - Width + 30;
         if (Left > right - 30) Left = right - 30;

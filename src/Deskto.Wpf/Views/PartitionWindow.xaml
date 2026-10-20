@@ -29,6 +29,8 @@
         <Border x:Name="ContentArea" Grid.Row="1" CornerRadius="0,0,9,9"
                 Background="#FFFFFF">
             <Grid>
+                <!-- 自定义背景图：PNG 透明处透出桌面；GIF 由 WpfAnimatedGif 循环播放 -->
+                <Image x:Name="BackgroundImage" Stretch="Uniform" Visibility="Collapsed"/>
                 <ContentPresenter x:Name="ContentHost"/>
                 <!-- 调整大小角标：两条 45° 斜线表示可拖拽 -->
                 <Grid x:Name="ResizeGrip" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom"

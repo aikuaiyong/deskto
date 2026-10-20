@@ -41,6 +41,10 @@ public sealed class PartitionConfig
     public double ContentOpacity { get; set; } = 0.45;
     public string? ContentBgColor { get; set; } = "#FFFFFF";
 
+    // 自定义背景图（路径为空 = 使用上面的纯色背景）
+    // PNG 透明通道天然生效（透明处透出桌面）；图片按「等比例缩放、完整显示」铺放，不裁剪不变形
+    public string BackgroundImagePath { get; set; } = "";
+
     // 行为
     public bool Locked { get; set; }
 }

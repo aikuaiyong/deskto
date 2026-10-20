@@ -24,6 +24,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Deskto.Core\Deskto.Core.csproj" />
     <PackageReference Include="Emoji.Wpf" Version="0.3.4" />
+    <!-- 播放动画背景：支持 GIF 与 APNG（WpfAnimatedGif 作者的演进版，纯托管） -->
+    <PackageReference Include="AnimatedImage.Wpf" Version="2.1.4" />
   </ItemGroup>
 
   <ItemGroup>
