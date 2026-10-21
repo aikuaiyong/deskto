@@ -1,26 +1,46 @@
 name: Build Windows exe
 
 on:
+  # 打标签时自动构建并发布到 Release（如 git tag v2.1.1 && git push --tags）
   push:
-    branches: [ main, master ]
+    tags: [ 'v*' ]
+  # 也支持在 GitHub 网页上手动点「Run workflow」触发
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish (win-x64, self-contained single file)
-        run: dotnet publish src/DesktopOrganizer.Wpf/DesktopOrganizer.Wpf.csproj -c Release -r win-x64 --self-contained true -o publish
+      - name: 还原依赖
+        run: dotnet restore deskto.sln
 
-      - name: Upload artifact
+      - name: 编译发布（win-x64 自包含单文件）
+        run: dotnet publish src/Deskto.Wpf/Deskto.Wpf.csproj -c Release -r win-x64 --self-contained true -o publish
+
+      - name: 打包为 zip
+        shell: pwsh
+        run: Compress-Archive -Path publish/deskto.exe -DestinationPath deskto-win-x64.zip
+
+      - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: DesktopOrganizer
-          path: publish/DesktopOrganizer.exe
+          name: deskto-win-x64
+          path: deskto-win-x64.zip
+
+      - name: 发布到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: deskto-win-x64.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
