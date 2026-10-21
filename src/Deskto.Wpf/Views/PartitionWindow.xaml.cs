@@ -6,12 +6,15 @@ using Deskto.Wpf.Shell;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -93,8 +96,8 @@ public partial class PartitionWindow : Window
     private void ApplyVisual()
     {
         var v = _model.Visual;
-        TitleText.Text = v.Title;
         TitleText.FontSize = v.TitleFontSize > 0 ? v.TitleFontSize : 13;
+        ApplyTitleStyle(v.Title);
         // 标题栏：Alpha 通道实现透明度，不影响子元素
         var tBg = ParseColor(v.TitleBgColor ?? "#3A6EA5");
         tBg.A = (byte)(Clamp01(v.TitleOpacity) * 255);
@@ -120,6 +123,78 @@ public partial class PartitionWindow : Window
             ContentArea.Background = new SolidColorBrush(cBg);
         }
         ResizeGrip.Visibility = v.Locked ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>渲染标题文字：支持纯色 / 彩虹（逐字色相渐变）/ 霓虹（单色强发光）。</summary>
+    private void ApplyTitleStyle(string text)
+    {
+        var v = _model.Visual;
+        TitleText.Inlines.Clear();
+        TitleText.Effect = null;
+
+        var mode = v.TitleTextEffect ?? "None";
+        var baseColor = string.IsNullOrWhiteSpace(v.TitleTextColor)
+            ? Colors.White
+            : ParseColor(v.TitleTextColor);
+
+        if (mode == "Rainbow" || mode == "RainbowGlow")
+        {
+            // 按「文本元素」拆分，避免把 Emoji / 代理对拆成乱码
+            var parts = new List<string>();
+            var en = StringInfo.GetTextElementEnumerator(text);
+            while (en.MoveNext()) parts.Add((string)en.Current!);
+            if (parts.Count == 0) parts.Add(text);
+
+            for (var i = 0; i < parts.Count; i++)
+            {
+                // 从起始色相出发，按设定跨度在色相环上逐字渐变
+                var hue = v.TitleRainbowHueStart +
+                          (parts.Count > 1 ? v.TitleRainbowHueRange * i / parts.Count : 0);
+                TitleText.Inlines.Add(new Run(parts[i])
+                {
+                    Foreground = new SolidColorBrush(HsvToColor(hue, 0.95, 1.0)),
+                    FontWeight = FontWeights.Bold,
+                });
+            }
+            // 仅 RainbowGlow 叠一层柔和白光；Rainbow 保持纯净不发光
+            if (mode == "RainbowGlow")
+            {
+                TitleText.Effect = new DropShadowEffect
+                {
+                    Color = Colors.White, BlurRadius = 8, ShadowDepth = 0, Opacity = 0.55,
+                };
+            }
+            return;
+        }
+
+        TitleText.Inlines.Add(new Run(text) { Foreground = new SolidColorBrush(baseColor) });
+        if (mode == "Neon")
+        {
+            TitleText.Effect = new DropShadowEffect
+            {
+                Color = baseColor, BlurRadius = 16, ShadowDepth = 0, Opacity = 1.0,
+            };
+        }
+    }
+
+    /// <summary>HSV → RGB，用于生成彩虹色相（h:0~360, s:0~1, v:0~1）。</summary>
+    private static Color HsvToColor(double h, double s, double v)
+    {
+        h = ((h % 360) + 360) % 360;
+        var c = v * s;
+        var x = c * (1 - Math.Abs((h / 60) % 2 - 1));
+        var m = v - c;
+        double r = 0, g = 0, b = 0;
+        switch ((int)(h / 60))
+        {
+            case 0: r = c; g = x; break;
+            case 1: r = x; g = c; break;
+            case 2: g = c; b = x; break;
+            case 3: g = x; b = c; break;
+            case 4: r = x; b = c; break;
+            default: r = c; b = x; break;
+        }
+        return Color.FromRgb((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
     }
 
     /// <summary>
@@ -398,7 +473,7 @@ public partial class PartitionWindow : Window
         var popup = new Window
         {
             Title = $"分区设置 - {_model.Visual.Title}",
-            Width = 320, Height = 600,
+            Width = 320, Height = 860,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
             ResizeMode = ResizeMode.NoResize,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -427,7 +502,7 @@ public partial class PartitionWindow : Window
         panel.Children.Add(colorBox);
 
         panel.Children.Add(new TextBlock { Text = $"标题栏透明度 ({_model.Visual.TitleOpacity * 100:F0}%)", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 4, 0, 2) });
-        var titleOpacitySlider = new Slider { Minimum = 0.1, Maximum = 1.0, Value = _model.Visual.TitleOpacity, TickFrequency = 0.1, IsSnapToTickEnabled = true };
+        var titleOpacitySlider = new Slider { Minimum = 0.0, Maximum = 1.0, Value = _model.Visual.TitleOpacity, TickFrequency = 0.1, IsSnapToTickEnabled = true };
         var titleOpacityLabel = (TextBlock)panel.Children[^1];
         titleOpacitySlider.ValueChanged += (_, _) => {
             titleOpacityLabel.Text = $"标题栏透明度 ({titleOpacitySlider.Value * 100:F0}%)";
@@ -451,8 +526,102 @@ public partial class PartitionWindow : Window
         };
         panel.Children.Add(titleFontSlider);
 
+        // ---------- 标题文字：颜色 + 效果（纯色/彩虹/霓虹） ----------
+        var textColorBox = new TextBox { Text = _model.Visual.TitleTextColor, Margin = new Thickness(0, 0, 0, 6) };
+        panel.Children.Add(new TextBlock { Text = "标题文字颜色（留空=白色）", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 6) });
+        var textSwatchGrid = new WrapPanel();
+        foreach (var c in paletteColors)
+        {
+            var sw = new Border { Width = 28, Height = 28, Margin = new Thickness(2), CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(ParseColor(c)), Cursor = Cursors.Hand, Tag = c };
+            sw.MouseLeftButtonDown += (s, _) => {
+                _model.Visual.TitleTextColor = (string)((Border)s!).Tag;
+                textColorBox.Text = (string)((Border)s!).Tag;
+                _state.Save();
+                ApplyTitleStyle(_model.Visual.Title);
+            };
+            textSwatchGrid.Children.Add(sw);
+        }
+        panel.Children.Add(textSwatchGrid);
+        panel.Children.Add(new TextBlock { Text = "或输入色号 (#RRGGBB)", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 4, 0, 2) });
+        panel.Children.Add(textColorBox);
+
+        panel.Children.Add(new TextBlock { Text = "标题文字效果", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 4) });
+        var effectBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+        effectBox.Items.Add("无（纯色）");
+        effectBox.Items.Add("🌈 彩虹（每字不同色，无光晕）");
+        effectBox.Items.Add("🌈 彩虹 + 光晕");
+        effectBox.Items.Add("✨ 霓虹（发光）");
+        effectBox.SelectedIndex = (_model.Visual.TitleTextEffect ?? "None") switch
+        {
+            "Rainbow" => 1,
+            "RainbowGlow" => 2,
+            "Neon" => 3,
+            _ => 0,
+        };
+        effectBox.SelectionChanged += (_, _) => {
+            _model.Visual.TitleTextEffect = effectBox.SelectedIndex switch { 1 => "Rainbow", 2 => "RainbowGlow", 3 => "Neon", _ => "None" };
+            _state.Save();
+            ApplyTitleStyle(_model.Visual.Title);
+        };
+        panel.Children.Add(effectBox);
+
+        // ---------- 彩虹色系自定义：起始色相 + 色彩跨度 ----------
+        var rainbowPresets = new (string Name, double Start, double Range)[]
+        {
+            ("🌈 完整彩虹", 0, 360),
+            ("🔥 暖阳（红→黄）", 0, 70),
+            ("🍑 蜜桃（粉→橙）", 320, 70),
+            ("🌿 森系（绿→青）", 95, 85),
+            ("🌊 海洋（青→蓝）", 175, 75),
+            ("💜 霓虹（品红→紫）", 275, 85),
+            ("🎨 自定义", -1, -1),
+        };
+        int MatchPreset(double s, double r)
+        {
+            for (var i = 0; i < rainbowPresets.Length - 1; i++)
+                if (Math.Abs(rainbowPresets[i].Start - s) < 1 && Math.Abs(rainbowPresets[i].Range - r) < 1) return i;
+            return rainbowPresets.Length - 1; // 自定义
+        }
+
+        panel.Children.Add(new TextBlock { Text = "彩虹色系", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 4) });
+        var rainbowBox = new ComboBox { Margin = new Thickness(0, 0, 0, 4) };
+        foreach (var p in rainbowPresets) rainbowBox.Items.Add(p.Name);
+        rainbowBox.SelectedIndex = MatchPreset(_model.Visual.TitleRainbowHueStart, _model.Visual.TitleRainbowHueRange);
+        panel.Children.Add(rainbowBox);
+
+        panel.Children.Add(new TextBlock { Text = $"起始色相 ({_model.Visual.TitleRainbowHueStart:F0}°)", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 6, 0, 2) });
+        var hueStartLabel = (TextBlock)panel.Children[^1];
+        panel.Children.Add(new TextBlock { Text = $"色彩跨度 ({_model.Visual.TitleRainbowHueRange:F0}°)", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 6, 0, 2) });
+        var hueRangeLabel = (TextBlock)panel.Children[^1];
+
+        var hueStartSlider = new Slider { Minimum = 0, Maximum = 360, Value = _model.Visual.TitleRainbowHueStart, TickFrequency = 5, IsSnapToTickEnabled = true };
+        var hueRangeSlider = new Slider { Minimum = 30, Maximum = 360, Value = _model.Visual.TitleRainbowHueRange, TickFrequency = 5, IsSnapToTickEnabled = true };
+
+        hueStartSlider.ValueChanged += (_, _) => {
+            _model.Visual.TitleRainbowHueStart = hueStartSlider.Value;
+            hueStartLabel.Text = $"起始色相 ({hueStartSlider.Value:F0}°)";
+            rainbowBox.SelectedIndex = MatchPreset(hueStartSlider.Value, hueRangeSlider.Value);
+            ApplyTitleStyle(_model.Visual.Title);
+        };
+        hueRangeSlider.ValueChanged += (_, _) => {
+            _model.Visual.TitleRainbowHueRange = hueRangeSlider.Value;
+            hueRangeLabel.Text = $"色彩跨度 ({hueRangeSlider.Value:F0}°)";
+            rainbowBox.SelectedIndex = MatchPreset(hueStartSlider.Value, hueRangeSlider.Value);
+            ApplyTitleStyle(_model.Visual.Title);
+        };
+        panel.Children.Add(hueStartSlider);
+        panel.Children.Add(hueRangeSlider);
+
+        rainbowBox.SelectionChanged += (_, _) => {
+            var idx = rainbowBox.SelectedIndex;
+            if (idx < 0 || idx >= rainbowPresets.Length - 1) return; // 选"自定义"时不覆盖当前值
+            hueStartSlider.Value = rainbowPresets[idx].Start;
+            hueRangeSlider.Value = rainbowPresets[idx].Range;        // 触发 ValueChanged → 实时预览
+        };
+
         panel.Children.Add(new TextBlock { Text = $"内容区透明度 ({_model.Visual.ContentOpacity * 100:F0}%)", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 8, 0, 2) });
-        var contentOpacitySlider = new Slider { Minimum = 0.1, Maximum = 1.0, Value = _model.Visual.ContentOpacity, TickFrequency = 0.1, IsSnapToTickEnabled = true };
+        var contentOpacitySlider = new Slider { Minimum = 0.0, Maximum = 1.0, Value = _model.Visual.ContentOpacity, TickFrequency = 0.1, IsSnapToTickEnabled = true };
         var contentOpacityLabel = (TextBlock)panel.Children[^1];
         contentOpacitySlider.ValueChanged += (_, _) => {
             contentOpacityLabel.Text = $"内容区透明度 ({contentOpacitySlider.Value * 100:F0}%)";
@@ -485,13 +654,24 @@ public partial class PartitionWindow : Window
         panel.Children.Add(contentColorBox);
 
         var btn = new Button { Content = "关闭", Height = 32, Margin = new Thickness(0, 12, 0, 0), Background = new SolidColorBrush(Color.FromRgb(0x3A, 0x6E, 0xA5)), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-        btn.Click += (_, _) =>
+        btn.Click += (_, _) => popup.Close();
+
+        // 无论点"关闭"还是右上角 ✕，都保存并统一重新应用一次外观
+        popup.Closed += (_, _) =>
         {
             _model.Visual.TitleOpacity = Clamp01(titleOpacitySlider.Value);
             _model.Visual.ContentOpacity = Clamp01(contentOpacitySlider.Value);
             _model.Visual.TitleFontSize = (int)titleFontSlider.Value;
+            // 手填的色号：以前只有点色板才生效，输入框填了会被忽略
+            var t = colorBox.Text.Trim();
+            if (!string.IsNullOrEmpty(t)) _model.Visual.TitleBgColor = t;
+            var c2 = contentColorBox.Text.Trim();
+            if (!string.IsNullOrEmpty(c2)) _model.Visual.ContentBgColor = c2;
+            _model.Visual.TitleTextColor = textColorBox.Text.Trim();
+            _model.Visual.TitleRainbowHueStart = hueStartSlider.Value;
+            _model.Visual.TitleRainbowHueRange = hueRangeSlider.Value;
             _state.Save();
-            popup.Close();
+            ApplyVisual();
         };
         panel.Children.Add(btn);
 
@@ -527,7 +707,7 @@ public partial class PartitionWindow : Window
             _model.Visual.Title = t;
         TitleEdit.Visibility = Visibility.Collapsed;
         TitleText.Visibility = Visibility.Visible;
-        TitleText.Text = _model.Visual.Title;
+        ApplyTitleStyle(_model.Visual.Title);   // 重新按当前效果渲染（彩虹/霓虹需逐字着色）
         _state.Save();
     }
 

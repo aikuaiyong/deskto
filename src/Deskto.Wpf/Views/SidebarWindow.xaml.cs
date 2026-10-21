@@ -26,8 +26,14 @@ public partial class SidebarWindow : Window
     private double _expandedWidth = 292;
     private bool _resizing;
     private double _resizeStartWidth;
+    private double _resizeStartScreenDip;   // 按下瞬间鼠标的屏幕坐标（DIP），用于算拖拽增量
     private bool _resizeUnlocked;  // 解锁后才能拖边缘调宽度
+    private bool _overResizeEdge;  // 当前是否正处于可拖拽边缘（用于只在切换时改光标）
     private System.Windows.Interop.HwndSourceHook? _bottomHook;
+
+    private const double MinSidebarWidth = 180;  // 展开态最小宽度，避免被压成一条看不见
+    private const double EdgeGrabZone = 8;       // 边缘可抓取宽度
+    private const double ResizeDeadZone = 3;     // 拖拽死区，防止单击边缘时抖动
 
     public SidebarWindow(AppState state, AppShell shell)
     {
@@ -76,7 +82,17 @@ public partial class SidebarWindow : Window
                 // 应用保存的布局（折叠 / 左右 / 宽度）
                 _collapsed = sb.Collapsed;
                 _onRight = sb.OnRight;
-                _expandedWidth = sb.Width > 38 ? sb.Width : 292;
+                // 旧版本可能因 DPI 计算的 bug 把宽度存成了 38 这种不可用值，这里自动恢复默认宽度并写回配置
+                if (sb.Width < MinSidebarWidth)
+                {
+                    _expandedWidth = 292;
+                    sb.Width = 292;
+                    _state.Save();
+                }
+                else
+                {
+                    _expandedWidth = sb.Width;
+                }
                 ApplySidebarLayout();
 
                 RebuildLabels();
@@ -95,6 +111,19 @@ public partial class SidebarWindow : Window
         AddHandler(MouseLeftButtonDownEvent, new MouseButtonEventHandler(OnWindowMouseDown), true);
         MouseMove += OnWindowMouseMove;
         MouseLeftButtonUp += OnWindowMouseUp;
+        MouseLeave += OnWindowMouseLeave;
+        // 捕获意外丢失（如 Alt+Tab、窗口被抢占、鼠标在窗口外松开）时收尾并保存宽度
+        LostMouseCapture += (_, _) =>
+        {
+            if (_resizing)
+            {
+                _state.Config.Sidebar.Width = _expandedWidth;
+                _state.Save();
+                _resizing = false;
+            }
+            _overResizeEdge = false;
+            Cursor = Cursors.Arrow;
+        };
     }
 
     private void StickyNote_TextChanged(object sender, TextChangedEventArgs e)
@@ -198,6 +227,8 @@ public partial class SidebarWindow : Window
         _resizeUnlocked = !_resizeUnlocked;
         BtnResizeLock.Content = _resizeUnlocked ? "🔓" : "🔒";
         BtnResizeLock.ToolTip = _resizeUnlocked ? "已解锁：拖动边缘调整宽度" : "已锁定：点击解锁";
+        _overResizeEdge = false;
+        Cursor = Cursors.Arrow; // 状态变化后重置，下次移动时重新判定
     }
 
     private void ToggleSettingsPanel()
@@ -207,31 +238,68 @@ public partial class SidebarWindow : Window
         AdjustHeight();
     }
 
-    // 保留供 XAML 绑定（不再有 ResizeGrip，这些是空壳）
+    /// <summary>鼠标是否落在可拖拽的边缘条上（右侧贴边时在左缘，左侧贴边时在右缘）。</summary>
+    private bool IsNearResizeEdge(double x)
+    {
+        if (_collapsed) return false;
+        return _onRight ? (x <= EdgeGrabZone) : (x >= Width - EdgeGrabZone);
+    }
+
+    /// <summary>命中测到的元素是否属于按钮——顶部按钮区不能触发边缘拖拽，否则点折叠键会误拖。</summary>
+    private static bool IsInsideButton(object? source)
+    {
+        var d = source as DependencyObject;
+        while (d != null)
+        {
+            if (d is Button) return true;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return false;
+    }
+
     private void OnWindowMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_collapsed || !_resizeUnlocked) return;
-        var x = e.GetPosition(this).X;
-        var edge = _onRight ? 6 : Width - 6;
-        var nearEdge = _onRight ? (x <= edge) : (x >= edge);
-        if (!nearEdge) return;
+        if (!_resizeUnlocked || _collapsed) return;
+        if (IsInsideButton(e.OriginalSource)) return;
+
+        var pos = e.GetPosition(this);
+        if (!IsNearResizeEdge(pos.X)) return;
+
         _resizing = true;
         _resizeStartWidth = Width;
+        // 用「Left + 窗口内 DIP 坐标」得到屏幕 DIP 坐标。
+        // 关键：绝不能用 PointToScreen（它返回物理像素），否则 125%/150% 缩放下会算出负数宽度。
+        _resizeStartScreenDip = Left + pos.X;
         CaptureMouse();
         e.Handled = true;
     }
 
     private void OnWindowMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_resizing) return;
-        var screenX = PointToScreen(e.GetPosition(this)).X;
-        var maxW = SystemParameters.PrimaryScreenWidth / 3;
-        double newW = _onRight
-            ? SystemParameters.PrimaryScreenWidth - screenX
-            : screenX;
-        if (newW < 38) newW = 38;
+        var pos = e.GetPosition(this);
+
+        if (!_resizing)
+        {
+            // 靠近边缘时显示左右拖拽箭头；只在状态切换时设 Cursor，避免覆盖子控件（如便签输入框）自己的光标
+            var canResize = _resizeUnlocked && IsNearResizeEdge(pos.X) && !IsInsideButton(e.OriginalSource);
+            if (canResize != _overResizeEdge)
+            {
+                _overResizeEdge = canResize;
+                Cursor = canResize ? Cursors.SizeWE : Cursors.Arrow;
+            }
+            return;
+        }
+
+        var screenDip = Left + pos.X;
+        var delta = screenDip - _resizeStartScreenDip;
+        if (Math.Abs(delta) < ResizeDeadZone) return;   // 死区：纯点击不改变宽度
+
+        // 右侧贴边：鼠标向左拖变宽；左侧贴边：鼠标向右拖变宽
+        double newW = _onRight ? _resizeStartWidth - delta : _resizeStartWidth + delta;
+        if (newW < MinSidebarWidth) newW = MinSidebarWidth;
+        var maxW = Math.Max(MinSidebarWidth, SystemParameters.PrimaryScreenWidth / 3);
         if (newW > maxW) newW = maxW;
-        Width = newW;
+
         _expandedWidth = newW;
         ApplySidebarLayout();
     }
@@ -244,7 +312,16 @@ public partial class SidebarWindow : Window
             _state.Save();
         }
         _resizing = false;
-        ReleaseMouseCapture();
+        if (IsMouseCaptured) ReleaseMouseCapture();
+        _overResizeEdge = false;
+        Cursor = Cursors.Arrow;
+    }
+
+    private void OnWindowMouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_resizing) return;
+        _overResizeEdge = false;
+        Cursor = Cursors.Arrow;
     }
 
     /// <summary>根据 _collapsed / _onRight / _expandedWidth 统一套用侧边栏布局。</summary>
@@ -265,6 +342,8 @@ public partial class SidebarWindow : Window
         }
         else
         {
+            // 兜底：展开态宽度不允许低于可用下限，否则整个侧边栏会被压成一条
+            if (_expandedWidth < MinSidebarWidth) _expandedWidth = MinSidebarWidth;
             Width = _expandedWidth;
             MainBorder.Width = double.NaN;
             BtnCollapse.Content = _onRight ? "◀" : "▶";

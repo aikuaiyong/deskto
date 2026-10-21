@@ -38,6 +38,13 @@ public sealed class PartitionConfig
     public string TitleBgColor { get; set; } = "#3A6EA5";
     public double TitleOpacity { get; set; } = 0.85;
     public int TitleFontSize { get; set; } = 13;
+    // 标题文字：TitleTextColor 为空时用默认白色
+    // TitleTextEffect：None=纯色 / Rainbow=每个字渐变彩虹色 / Neon=霓虹发光（配颜色）
+    public string TitleTextColor { get; set; } = "";
+    public string TitleTextEffect { get; set; } = "None";
+    // 彩虹色系：从起始色相开始，按跨度在色相环上逐字渐变（0~360）
+    public double TitleRainbowHueStart { get; set; } = 0;
+    public double TitleRainbowHueRange { get; set; } = 360;
     public double ContentOpacity { get; set; } = 0.45;
     public string? ContentBgColor { get; set; } = "#FFFFFF";
 
