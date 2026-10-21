@@ -114,7 +114,7 @@ public partial class PartitionWindow : Window
         else
         {
             // 清掉背景图（含 GIF 动画状态）
-            ImageBehavior.SetAnimatedSource(BackgroundImage, null);
+            ImageBehavior.SetAnimatedSource(BackgroundImage, null!);
             BackgroundImage.Source = null;
             BackgroundImage.Visibility = Visibility.Collapsed;
             // Alpha 通道替代 Opacity，图标不再雾化
@@ -232,7 +232,7 @@ public partial class PartitionWindow : Window
                 // 其余静态图：走缓存，避免重复解码
                 var img = LoadCachedImage(path);
                 if (img == null) return false;
-                ImageBehavior.SetAnimatedSource(target, null);  // 清掉残留的动画状态
+                ImageBehavior.SetAnimatedSource(target, null!);  // 清掉残留的动画状态
                 target.Source = img;
             }
             target.Stretch = Stretch.Uniform;
@@ -319,7 +319,7 @@ public partial class PartitionWindow : Window
                 : v.BackgroundImagePath;
             if (string.IsNullOrWhiteSpace(v.BackgroundImagePath))
             {
-                ImageBehavior.SetAnimatedSource(previewImg, null);
+                ImageBehavior.SetAnimatedSource(previewImg, null!);
                 previewImg.Source = null;
             }
             else

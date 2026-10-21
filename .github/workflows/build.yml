@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # 发布 Release 需要写权限，否则会报 Resource not accessible by integration
+    permissions:
+      contents: write
 
     steps:
       - name: 拉取代码
@@ -41,6 +44,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: deskto-win-x64.zip
-          generate_release_notes: true
+          name: deskto ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
