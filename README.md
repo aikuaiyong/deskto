@@ -48,8 +48,6 @@ cd deskto
 
 ## 打包分发
 
-想把 deskto 发给没有开发环境的朋友？用自包含单文件发布即可——**对方电脑无需安装 .NET**。
-
 **最简单（推荐）**：直接**双击仓库根目录的 `build.bat`**，窗口会自动停住不会闪退，跟着提示走即可。
 
 或手动在终端运行：
@@ -58,18 +56,29 @@ cd deskto
 .\build.ps1
 ```
 
-脚本会依次完成：还原依赖 → 发布 `win-x64` 自包含单文件 → 自动压缩为 **`deskto-win-x64.zip`**。
+脚本会依次完成：还原依赖 → 发布 `win-x64` → 自动压缩为 **`deskto-win-x64.zip`**。
 
-把 `deskto-win-x64.zip` 发给别人，解压后双击 `deskto.exe` 即用。
+### 两种产物，按需选择
 
-| 方案 | 产物 | 适合人群 |
-|------|------|----------|
-| `.\build.ps1`（默认） | `deskto-win-x64.zip`（单文件 exe） | 大多数分发场景，零依赖 |
-| `setup.iss` + Inno Setup | `deskto-Setup.exe` 安装向导 | 想给小白用户提供「下一步」安装体验 |
+| 方案 | 命令 | 体积 | 对方电脑要求 |
+|------|------|------|--------------|
+| **轻量便携版**（默认，推荐） | `.\build.ps1` | **约 2 MB** | 需装 [.NET 8 桌面运行时](https://dotnet.microsoft.com/download/dotnet/8.0)（装一次即可） |
+| **免环境完整版** | `dotnet publish src/Deskto.Wpf/Deskto.Wpf.csproj -c Release -r win-x64 -p:SelfContained=true -p:PublishSingleFile=false` | 约 160 MB | 无需任何环境，解压即用 |
+| 安装向导 | `setup.iss` + Inno Setup | — | 想给小白用户提供「下一步」体验 |
+
+> **日常自用推荐轻量便携版**：体积小、启动快、更新方便。只有要发给完全不懂电脑的人时才用免环境版。
 
 > 安装向导需先装 [Inno Setup](https://jrsoftware.org/isdl.php)，用其打开 `setup.iss` 编译即可。
 
-> 想缩减体积？把 `Deskto.Wpf.csproj` 的 `<SelfContained>` 改为 `false` 做依赖框架发布，但目标机器需先装 .NET 8 运行时。
+### 用 GitHub Actions 自动打包（无需本地环境）
+
+仓库已配置 CI，推送标签即可自动构建：
+
+```bash
+git tag v2.2.0 && git push origin v2.2.0
+```
+
+几分钟后 GitHub 的 Releases 页面会自动出现 `deskto-portable.zip` 与 `deskto-standalone.zip`。也可以进 GitHub 仓库 → **Actions** → **Run workflow** 手动触发。
 
 ---
 
