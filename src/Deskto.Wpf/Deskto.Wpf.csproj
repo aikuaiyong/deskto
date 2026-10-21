@@ -10,12 +10,14 @@
     <AssemblyName>deskto</AssemblyName>
     <ApplicationIcon>Deskto.ico</ApplicationIcon>
     <RootNamespace>Deskto.Wpf</RootNamespace>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
-    <Version>2.0.0</Version>
-    <!-- 单文件发布（Windows 上 dotnet publish 产出独立 exe） -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
+    <AssemblyVersion>2.1.3.0</AssemblyVersion>
+    <FileVersion>2.1.3.0</FileVersion>
+    <Version>2.1.3</Version>
+    <!-- 默认产出「轻量便携版」：只有几 MB，解压即用（需目标机装 .NET 8 桌面运行时）。
+         如需「免安装环境」的完整版，用命令行覆盖：
+         dotnet publish -r win-x64 -p:SelfContained=true -p:PublishSingleFile=false -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishTrimmed>false</PublishTrimmed>
     <!-- 若你的环境是 .NET 9，把上方 TargetFramework 改为 net9.0-windows 即可 -->

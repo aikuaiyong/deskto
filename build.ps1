@@ -29,7 +29,7 @@ $publishDir = Join-Path $root "publish"
 $appProj    = Join-Path $root "src/Deskto.Wpf/Deskto.Wpf.csproj"
 
 # 版本号（与 csproj AssemblyVersion 保持一致即可）
-$version = "2.0"
+$version = "2.1.3"
 
 # 前置检查：必须在项目根目录运行，且需已安装 .NET 8 SDK
 if (-not (Test-Path (Join-Path $root "deskto.sln"))) {
@@ -50,11 +50,12 @@ Write-Host "检测到 dotnet 版本：$dotnetVer"
 Write-Host "==> 1/4 还原依赖"
 dotnet restore (Join-Path $root "deskto.sln")
 
-Write-Host "==> 2/4 发布 deskto (win-x64, 自包含单文件)"
-# 自包含 + 单文件：用户电脑无需安装 .NET 即可运行，解压后双击 deskto.exe 即可
+Write-Host "==> 2/4 发布 deskto (win-x64, 轻量便携版)"
+# 轻量便携版：产出仅数 MB，解压后双击 deskto.exe 即可
+# 目标电脑需安装 .NET 8 桌面运行时（https://dotnet.microsoft.com/download/dotnet/8.0）
 dotnet publish $appProj `
-    -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:PublishTrimmed=false -o $publishDir
+    -c Release -r win-x64 --self-contained false `
+    -p:PublishSingleFile=false -p:PublishTrimmed=false -o $publishDir
 
 if (-not (Test-Path (Join-Path $publishDir "deskto.exe"))) {
     Write-Error "发布失败：未找到 deskto.exe"
@@ -66,7 +67,12 @@ if (-not (Test-Path (Join-Path $publishDir "deskto.exe"))) {
 deskto $version —— Windows 桌面背景分区工具
 
 【运行方式】
-直接双击 deskto.exe 即可（无需安装 .NET）。
+解压后双击 deskto.exe 即可。
+
+【运行环境】
+轻量便携版，需要电脑已安装 .NET 8 桌面运行时（装一次即可）：
+  https://dotnet.microsoft.com/download/dotnet/8.0  →  ".NET Desktop Runtime 8.x"
+若未安装，双击时会提示下载，按提示装好即可。
 首次运行会在「%LOCALAPPDATA%\deskto\config.json」生成配置文件。
 
 【功能】

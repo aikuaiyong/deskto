@@ -126,11 +126,17 @@ public partial class SidebarWindow : Window
         };
     }
 
+    private DateTime _lastStickySave = DateTime.MinValue;
+
     private void StickyNote_TextChanged(object sender, TextChangedEventArgs e)
     {
-        _state.Config.StickyNote = StickyNote.Text;
+        _state.Config.StickyNote = StickyNote.Text;   // 内存始终最新
+        AdjustHeight();                               // 内容变高时侧边栏跟着长
+        // 每敲一个键都同步写盘会明显卡顿，做 1 秒节流；退出时 App.OnExit 会兜底保存
+        var now = DateTime.Now;
+        if ((now - _lastStickySave).TotalMilliseconds < 1000) return;
+        _lastStickySave = now;
         _state.Save();
-        AdjustHeight();
     }
 
     private void EditStickyBg()

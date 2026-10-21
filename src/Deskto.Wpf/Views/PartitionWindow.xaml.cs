@@ -414,6 +414,9 @@ public partial class PartitionWindow : Window
         if (_model.Visual.Locked) return;
         if (TitleEdit.Visibility == Visibility.Visible) return;
         DragMove();
+        // DragMove 期间位置变化靠 OnLocationChanged 保存（有节流），
+        // 松手后强制写一次，确保最终位置一定落盘（否则可能被节流跳过）
+        SaveGeometry(force: true);
     }
 
     private void TitleBar_RightClick(object sender, MouseButtonEventArgs e)
@@ -714,6 +717,7 @@ public partial class PartitionWindow : Window
     // ---------- 拖拽移动 / 缩放 ----------
     private bool _resizing;
     private Point _resizeStart;
+    private DateTime _lastGeometrySave = DateTime.MinValue;
 
     private void ResizeGrip_MouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -747,7 +751,7 @@ public partial class PartitionWindow : Window
         if (!_resizing) return;
         _resizing = false;
         ResizeGrip.ReleaseMouseCapture();
-        SaveGeometry();
+        SaveGeometry(force: true);   // 松手时强制落盘，确保最终尺寸一定被保存
     }
 
     protected override void OnLocationChanged(EventArgs e)
@@ -783,7 +787,10 @@ public partial class PartitionWindow : Window
         if (Top > bottom - 30) Top = bottom - 30;
     }
 
-    private void SaveGeometry()
+    /// <summary>记录几何到内存并落盘。
+    /// 拖动/缩放时每帧都会触发，若每次都同步写盘会明显卡顿，故做 500ms 节流；
+    /// 但内存值始终是最新的，最终一定会被保存（松手时强制写、退出时也会写）。</summary>
+    private void SaveGeometry(bool force = false)
     {
         if (_restoringGeometry) return;
         var v = _model.Visual;
@@ -791,6 +798,8 @@ public partial class PartitionWindow : Window
         v.Y = Top;
         v.Width = Width;
         v.Height = Height;
+        if (!force && (DateTime.Now - _lastGeometrySave).TotalMilliseconds < 500) return;
+        _lastGeometrySave = DateTime.Now;
         _state.Save();
     }
 

@@ -9,7 +9,7 @@ internal static class TrayIcon
 {
     private static NotifyIcon? _icon;
 
-    public static void Create(App app, AppShell shell)
+    public static void Create(App app, AppShell shell, bool showStartupTip = false)
     {
         var cm = new ContextMenuStrip();
         cm.Items.Add("显示/隐藏全部", null, (_, _) => shell.ToggleHideAll());
@@ -42,6 +42,11 @@ internal static class TrayIcon
             Visible = true,
         };
         _icon.DoubleClick += (_, _) => shell.ToggleHideAll();
+
+        // 首次运行时气泡提示，避免用户不知道程序已启动（分区是半透明背景，存在感很低）
+        if (showStartupTip)
+            _icon.ShowBalloonTip(6000, "deskto 已启动",
+                "右键托盘图标可添加分区 / 解锁分区 / 设置 / 退出。", ToolTipIcon.Info);
     }
 
     public static void Dispose()

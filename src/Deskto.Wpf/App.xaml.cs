@@ -31,7 +31,7 @@ public partial class App : Application
             _state = new AppState();
             _shell = new AppShell(_state);
             _shell.Start();
-            TrayIcon.Create(this, _shell);
+            TrayIcon.Create(this, _shell, _state.IsFirstRun);
         }
         catch (Exception ex2)
         {
@@ -46,5 +46,13 @@ public partial class App : Application
         _state?.Save();
         TrayIcon.Dispose();
         base.OnExit(e);
+    }
+
+    /// <summary>系统关机/注销时 Windows 不一定走完整退出流程，这里补一次保存，
+    /// 避免最后调整的分区位置/大小丢失。</summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        _state?.Save();
+        base.OnSessionEnding(e);
     }
 }

@@ -23,6 +23,20 @@ public sealed class AppShell
 
     public void Start()
     {
+        // 首次运行：自动建一个示例分区，否则桌面上什么都没有，容易被误认为「程序没启动」
+        if (_state.IsFirstRun && _state.Config.Partitions.Count == 0)
+        {
+            _state.Config.Partitions.Add(new PartitionConfig
+            {
+                Title = "示例分区",
+                X = Math.Max(0, SystemParameters.PrimaryScreenWidth / 2 - 160),
+                Y = Math.Max(0, SystemParameters.PrimaryScreenHeight / 2 - 120),
+                Width = 320,
+                Height = 240,
+            });
+            _state.Save();
+        }
+
         // 用户文件分区
         foreach (var p in _state.Config.Partitions)
         {

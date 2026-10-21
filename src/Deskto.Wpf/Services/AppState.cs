@@ -13,9 +13,13 @@ public sealed class AppState
     public AppConfig Config { get; private set; } = new();
     public string ConfigPath { get; }
 
+    /// <summary>是否首次运行（配置文件尚不存在）。用于初始化示例分区与启动提示。</summary>
+    public bool IsFirstRun { get; }
+
     public AppState(string? configPath = null)
     {
         ConfigPath = configPath ?? DefaultPath;
+        IsFirstRun = !File.Exists(ConfigPath);
         Config = ConfigStore.Load(ConfigPath);
     }
 

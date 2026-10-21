@@ -1,7 +1,7 @@
 name: Build Windows exe
 
 on:
-  # 打标签时自动构建并发布到 Release（如 git tag v2.1.1 && git push --tags）
+  # 打标签时自动构建并发布到 Release（如 git tag v2.1.3 && git push --tags）
   push:
     tags: [ 'v*' ]
   # 也支持在 GitHub 网页上手动点「Run workflow」触发
@@ -26,24 +26,44 @@ jobs:
       - name: 还原依赖
         run: dotnet restore deskto.sln
 
-      - name: 编译发布（win-x64 自包含单文件）
-        run: dotnet publish src/Deskto.Wpf/Deskto.Wpf.csproj -c Release -r win-x64 --self-contained true -o publish
+      # 主交付：轻量便携版（仅数 MB，需目标机装 .NET 8 桌面运行时）
+      - name: 编译轻量便携版
+        run: dotnet publish src/Deskto.Wpf/Deskto.Wpf.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o publish-portable
+
+      # 备选：免环境完整版（体积大，但无需安装任何运行时）
+      - name: 编译免环境完整版
+        run: dotnet publish src/Deskto.Wpf/Deskto.Wpf.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o publish-standalone
 
       - name: 打包为 zip
         shell: pwsh
-        run: Compress-Archive -Path publish/deskto.exe -DestinationPath deskto-win-x64.zip
+        run: |
+          New-Item -ItemType Directory -Force -Path stage-portable, stage-standalone | Out-Null
+          Copy-Item -Path publish-portable\* -Destination stage-portable -Recurse -Force
+          Copy-Item -Path publish-standalone\* -Destination stage-standalone -Recurse -Force
+          Compress-Archive -Path stage-portable\* -DestinationPath deskto-portable.zip
+          Compress-Archive -Path stage-standalone\* -DestinationPath deskto-standalone.zip
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
           name: deskto-win-x64
-          path: deskto-win-x64.zip
+          path: |
+            deskto-portable.zip
+            deskto-standalone.zip
 
       - name: 发布到 Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: deskto-win-x64.zip
+          files: |
+            deskto-portable.zip
+            deskto-standalone.zip
           name: deskto ${{ github.ref_name }}
+          body: |
+            **deskto ${{ github.ref_name }}**
+
+            - `deskto-portable.zip`（约 1 MB，推荐）：解压即用，需电脑已装 **.NET 8 桌面运行时**
+              （未装的话点此安装：https://dotnet.microsoft.com/download/dotnet/8.0 → .NET Desktop Runtime）
+            - `deskto-standalone.zip`（约 70 MB）：免环境，无需安装任何运行时，解压即用
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
